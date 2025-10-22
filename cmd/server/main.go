@@ -32,28 +32,28 @@ func newServer(dic dictionary.Repository, pangrams []string) *server {
 	}
 }
 
-func (s *server) StartGame(ctx context.Context, req *beepb.StartGameRequest) (*beepb.StartGameResponse, error) {
-	var chosen string
-	seed := strings.TrimSpace(strings.ToLower(req.GetPangramSeed()))
+func (beeServer *server) StartGame(ctx context.Context, req *beepb.StartGameRequest) (*beepb.StartGameResponse, error) {
+	var chosenPangram string
+	pangramSeed := strings.TrimSpace(strings.ToLower(req.GetPangramSeed()))
 
 	// pick pangram: seeded or random
-	if seed != "" {
-		log.Printf("using seed: %s", seed)
-		chosen = seed
-	} else if len(s.pangrams) > 0 {
+	if pangramSeed != "" {
+		log.Printf("using seed: %s", pangramSeed)
+		chosenPangram = pangramSeed
+	} else if len(beeServer.pangrams) > 0 {
 		rand.Seed(time.Now().UnixNano())
-		chosen = s.pangrams[rand.Intn(len(s.pangrams))]
-		log.Printf("random pangram: %s", chosen)
+		chosenPangram = beeServer.pangrams[rand.Intn(len(beeServer.pangrams))]
+		log.Printf("random pangram: %s", chosenPangram)
 	} else {
 		log.Printf("no pangrams found")
 	}
 
 	// make 7 letters and a center
-	letters, center := game.LettersFromPangram(chosen)
+	letters, center := game.LettersFromPangram(chosenPangram)
 	shuffleStrings(letters)
 
 	// store game in registry
-	id := s.reg.Add(&game.State{
+	gameId := beeServer.reg.Add(&game.State{
 		Letters: letters,
 		Center:  center,
 		Score:   0,
@@ -61,15 +61,15 @@ func (s *server) StartGame(ctx context.Context, req *beepb.StartGameRequest) (*b
 	})
 
 	return &beepb.StartGameResponse{
-		GameId:       id,
+		GameId:       gameId,
 		Letters:      letters,
 		CenterLetter: center,
 		CurrentScore: 0,
 	}, nil
 }
 
-func (s *server) SubmitWord(ctx context.Context, req *beepb.SubmitWordRequest) (*beepb.SubmitWordResponse, error) {
-	g, ok := s.reg.Get(req.GetGameId())
+func (beeServer *server) SubmitWord(ctx context.Context, req *beepb.SubmitWordRequest) (*beepb.SubmitWordResponse, error) {
+	gameState, ok := beeServer.reg.Get(req.GetGameId())
 	if !ok {
 		return &beepb.SubmitWordResponse{Valid: false, Reason: "game not found", TotalScore: 0}, nil
 	}
@@ -77,38 +77,38 @@ func (s *server) SubmitWord(ctx context.Context, req *beepb.SubmitWordRequest) (
 	word := norm(req.GetWord())
 
 	invalid := func(reason string) *beepb.SubmitWordResponse {
-		return &beepb.SubmitWordResponse{Valid: false, Reason: reason, TotalScore: int32(g.Score)}
+		return &beepb.SubmitWordResponse{Valid: false, Reason: reason, TotalScore: int32(gameState.Score)}
 	}
 
 	// quick checks
 	if utf8.RuneCountInString(word) < 4 {
 		return invalid("too short"), nil
 	}
-	if !containsCenter(word, g.Center) {
+	if !containsCenter(word, gameState.Center) {
 		return invalid("missing center"), nil
 	}
-	if !onlyFromSet(word, g.Letters) {
+	if !onlyFromSet(word, gameState.Letters) {
 		return invalid("bad letters"), nil
 	}
-	if !s.dic.Contains(word) {
+	if !beeServer.dic.Contains(word) {
 		return invalid("not in dictionary"), nil
 	}
-	if g.Found[word] {
+	if gameState.Found[word] {
 		return invalid("already found"), nil
 	}
 
-	// valid word gets score 
-	pangram := usesAllSeven(word, g.Letters)
-	ws := scoreWord(word, pangram)
+	// valid word gets score
+	pangram := usesAllSeven(word, gameState.Letters)
+	wordScore := scoreWord(word, pangram)
 
-	g.Found[word] = true
-	g.Score += ws
+	gameState.Found[word] = true
+	gameState.Score += wordScore
 
 	return &beepb.SubmitWordResponse{
 		Valid:      true,
-		WordScore:  int32(ws),
+		WordScore:  int32(wordScore),
 		Pangram:    pangram,
-		TotalScore: int32(g.Score),
+		TotalScore: int32(gameState.Score),
 	}, nil
 }
 
@@ -121,31 +121,31 @@ func main() {
 	dic = dictionary.WithCache(dic)
 
 	// load pangrams
-	pangs, err := dictionary.LoadPangrams("data/pangrams.txt")
+	pangramList, err := dictionary.LoadPangrams("data/pangrams.txt")
 	if err != nil {
 		log.Printf("warning: load pangrams: %v", err)
-		pangs = nil
+		pangramList = nil
 	}
-	log.Printf("loaded %d pangrams", len(pangs))
+	log.Printf("loaded %d pangrams", len(pangramList))
 
 	// start gRPC server
-	lis, err := net.Listen("tcp", ":50051")
+	listener, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}
 
-	s := grpc.NewServer()
-	beepb.RegisterBeeServiceServer(s, newServer(dic, pangs))
+	grpcServer := grpc.NewServer()
+	beepb.RegisterBeeServiceServer(grpcServer, newServer(dic, pangramList))
 
 	log.Printf("Bee server running on :50051")
-	if err := s.Serve(lis); err != nil {
+	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
 }
 
 // helper functions
-// clean word: trim + lowercase
-func norm(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+// trim + lowercase as its a user input
+func norm(inputWord string) string { return strings.ToLower(strings.TrimSpace(inputWord)) }
 
 // check if word has center letter
 func containsCenter(word, center string) bool {
@@ -155,11 +155,11 @@ func containsCenter(word, center string) bool {
 // true if all letters in word come from allowed set
 func onlyFromSet(word string, letters []string) bool {
 	set := map[rune]bool{}
-	for _, s := range letters {
-		set[[]rune(s)[0]] = true
+	for _, letter := range letters {
+		set[[]rune(letter)[0]] = true
 	}
-	for _, r := range word {
-		if !set[r] {
+	for _, runeValue := range word {
+		if !set[runeValue] {
 			return false
 		}
 	}
@@ -169,11 +169,11 @@ func onlyFromSet(word string, letters []string) bool {
 // true if word uses all 7 letters
 func usesAllSeven(word string, letters []string) bool {
 	need := map[rune]bool{}
-	for _, s := range letters {
-		need[[]rune(s)[0]] = true
+	for _, letter := range letters {
+		need[[]rune(letter)[0]] = true
 	}
-	for _, r := range word {
-		delete(need, r)
+	for _, runeValue := range word {
+		delete(need, runeValue)
 		if len(need) == 0 {
 			return true
 		}
@@ -183,14 +183,14 @@ func usesAllSeven(word string, letters []string) bool {
 
 // calc word score, +7 if pangram
 func scoreWord(word string, pangram bool) int {
-	n := utf8.RuneCountInString(word)
-	if n == 4 {
+	wordLength := utf8.RuneCountInString(word)
+	if wordLength == 4 {
 		if pangram {
 			return 1 + 7
 		}
 		return 1
 	}
-	score := n
+	score := wordLength
 	if pangram {
 		score += 7
 	}
@@ -198,10 +198,10 @@ func scoreWord(word string, pangram bool) int {
 }
 
 // shuffle order of letters
-func shuffleStrings(a []string) {
+func shuffleStrings(letters []string) {
 	rand.Seed(time.Now().UnixNano())
-	for i := len(a) - 1; i > 0; i-- {
+	for i := len(letters) - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
-		a[i], a[j] = a[j], a[i]
+		letters[i], letters[j] = letters[j], letters[i]
 	}
 }

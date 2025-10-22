@@ -16,19 +16,19 @@ import (
 
 func main() {
 	// connect to server
-	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	connection, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
+	defer connection.Close()
 
 	// make gRPC client
-	c := beepb.NewBeeServiceClient(conn)
+	beeServiceClient := beepb.NewBeeServiceClient(connection)
 
 	// start a new game
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	start, err := c.StartGame(ctx, &beepb.StartGameRequest{})
+	start, err := beeServiceClient.StartGame(ctx, &beepb.StartGameRequest{})
 	if err != nil {
 		panic(err)
 	}
@@ -45,18 +45,18 @@ func main() {
 		if !in.Scan() {
 			break
 		}
-		w := strings.TrimSpace(strings.ToLower(in.Text()))
-		if w == "" {
+		word := strings.TrimSpace(strings.ToLower(in.Text()))
+		if word == "" {
 			continue
 		}
-		if w == "quit" || w == "exit" {
+		if word == "quit" || word == "exit" {
 			break
 		}
 
 		// send one request and get one response
-		resp, err := c.SubmitWord(context.Background(), &beepb.SubmitWordRequest{
+		resp, err := beeServiceClient.SubmitWord(context.Background(), &beepb.SubmitWordRequest{
 			GameId: start.GetGameId(),
-			Word:   w,
+			Word:   word,
 		})
 		if err != nil {
 			fmt.Println("error:", err)
@@ -81,13 +81,13 @@ func main() {
 // printLetters shows letters like: A Y O [T] C U R
 // the one in brackets is the required center
 func printLetters(letters []string, center string) {
-	c := strings.ToLower(center)
+	centerLetter := strings.ToLower(center)
 	parts := make([]string, 0, len(letters))
-	for _, L := range letters {
-		if strings.ToLower(L) == c {
-			parts = append(parts, "["+strings.ToUpper(L)+"]")
+	for _, letter := range letters {
+		if strings.ToLower(letter) == centerLetter {
+			parts = append(parts, "["+strings.ToUpper(letter)+"]")
 		} else {
-			parts = append(parts, strings.ToUpper(L))
+			parts = append(parts, strings.ToUpper(letter))
 		}
 	}
 	fmt.Println(strings.Join(parts, " "))

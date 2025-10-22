@@ -6,20 +6,20 @@ import (
 )
 
 // LoadPangrams reads one pangram per line from the file.
-func LoadPangrams(path string) ([]string, error) {
-	f, err := os.Open(path)
+func LoadPangrams(filePath string) ([]string, error) {
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer file.Close()
 
-	var out []string
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		word := sc.Text()
-		if word != "" {
-			out = append(out, word)
+	var pangrams []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line != "" {
+			pangrams = append(pangrams, line)
 		}
 	}
-	return out, sc.Err()
+	return pangrams, scanner.Err()
 }

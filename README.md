@@ -8,6 +8,7 @@ Single-player Spelling Bee game built in Go with gRPC.
 Client sends guesses to the server, which validates, scores, and returns an updated total.
 
 ## Running the game
+- Terminal 1, Generate Go gRPC code from the proto: `protoc --go_out=. --go-grpc_out=. api/spelling/v1/bee.proto`
 - Terminal 1: `go run ./cmd/server`
 - Terminal 2: `go run ./cmd/client`
 
@@ -15,7 +16,7 @@ Client sends guesses to the server, which validates, scores, and returns an upda
 1. **Adapter**  
    - Where: internal/dictionary/repo.go  
    - What: Hides external dictionary format (JSON) and exposes a simple `Contains(word)` interface.  
-   - Why: Server code doesn’t need to know file format; swapping the data source later is easy.  
+   - Why: Server code doesn’t need to know file format, swapping the data source later is easy.  
 
 2. **Factory**  
    - Where: internal/game/letters.go / server main  
@@ -25,12 +26,12 @@ Client sends guesses to the server, which validates, scores, and returns an upda
 3. **Decorator**  
    - Where: internal/dictionary/cache.go  
    - What: Wraps repository with in-memory caching.  
-   - Why:  Dictionary lookups happen frequently; caching improves performance without changing adapter code.  
+   - Why:  Dictionary lookups happen frequently, caching improves performance without changing adapter code.  
 
 4. **Singleton**  
    - Where: internal/game/registry.go  
    - What: Single shared registry stores all game state.  
-   - Why: Keeps one source of truth for multiple games, simplifies state management, easy to expand later.  
+   - Why: Keeps one source of truth for multiple games, simplifies state management, preparation for assignment 2. 
 
 ## Project structure
 - `api/spelling/v1/bee.proto` – gRPC contract  
@@ -42,5 +43,5 @@ Client sends guesses to the server, which validates, scores, and returns an upda
 - `data/pangrams.txt` – pangrams list
 
 ## Resources
-- Lab sheet, lecture slides for implementations for gRPC & design principles
-- GeeksforGeeks website and genAI to understand design patterns and gRPC better
+- Lab sheets & lecture slides for implementations for gRPC & design principles
+- GeeksforGeeks website & genAI to understand design patterns and gRPC better

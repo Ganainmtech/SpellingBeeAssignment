@@ -7,35 +7,36 @@ import (
 )
 
 // LettersFromPangram takes a word and
-// collects 7 letters then picks one as the center
-func LettersFromPangram(p string) (letters []string, center string) {
-	set := make(map[rune]bool)
-	var uniq []rune
+// collects 7 letters then picks one as the center.
+func LettersFromPangram(pangramWord string) (letters []string, center string) {
+	// Track which letters we hav already added (map) and store them in order (slice)
+	uniqueRunes := make(map[rune]bool)
+	var uniqueLetters []rune
 
 	// collect up to 7 unique letters
-	for _, r := range strings.ToLower(p) {
-		if unicode.IsLetter(r) && !set[r] {
-			set[r] = true
-			uniq = append(uniq, r)
-			if len(uniq) == 7 {
+	for _, letterRune := range strings.ToLower(pangramWord) {
+		if unicode.IsLetter(letterRune) && !uniqueRunes[letterRune] {
+			uniqueRunes[letterRune] = true
+			uniqueLetters = append(uniqueLetters, letterRune)
+			if len(uniqueLetters) == 7 {
 				break
 			}
 		}
 	}
 
-	// if less than 7 unique found add more from the word
-	for _, r := range strings.ToLower(p) {
-		if len(uniq) == 7 {
+	// if less than 7 unique found, add more from the word
+	for _, letterRune := range strings.ToLower(pangramWord) {
+		if len(uniqueLetters) == 7 {
 			break
 		}
-		if unicode.IsLetter(r) {
-			uniq = append(uniq, r)
+		if unicode.IsLetter(letterRune) {
+			uniqueLetters = append(uniqueLetters, letterRune)
 		}
 	}
 
 	// convert runes to strings
-	for _, r := range uniq[:7] {
-		letters = append(letters, string(r))
+	for _, letterRune := range uniqueLetters[:7] {
+		letters = append(letters, string(letterRune))
 	}
 
 	// pick random center letter
