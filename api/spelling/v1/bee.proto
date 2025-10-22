@@ -1,0 +1,37 @@
+// api/spelling/v1/bee.proto
+syntax = "proto3";
+
+package spelling.v1;
+
+option go_package = "assignmentOne/api/spelling/v1;beepb";
+
+service BeeService {
+  rpc StartGame (StartGameRequest) returns (StartGameResponse);
+  rpc SubmitWord (SubmitWordRequest) returns (SubmitWordResponse);
+}
+
+// Seed for deterministic games (tests)
+message StartGameRequest { string pangram_seed = 1; }
+
+// Minimal info the client needs to play.
+message StartGameResponse {
+  string game_id = 1;
+  repeated string letters = 2;   // 7 letters
+  string center_letter = 3;      // must be included
+  int32 current_score = 4;       // starts at 0
+}
+
+// Send a guess for a specific game.
+message SubmitWordRequest {
+  string game_id = 1;
+  string word = 2;
+}
+
+// Validity + scoring.
+message SubmitWordResponse {
+  bool valid = 1;
+  string reason = 2;       // why invalid
+  int32 word_score = 3;    // points for this word
+  bool pangram = 4;        // used all 7 letters
+  int32 total_score = 5;   // updated running total
+}
