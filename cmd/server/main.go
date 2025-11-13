@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+	"assignmentOne/internal/stats"
 
 	"google.golang.org/grpc"
 )
@@ -20,15 +21,17 @@ type server struct {
 	beepb.UnimplementedBeeServiceServer
 	reg      *game.Registry        // game state manager
 	dic      dictionary.Repository // dictionary with cache
-	pangrams []string              // list of pangrams for new games
+	pangrams []string 
+	stats *stats.Manager // handles reading/writing stats.json             // list of pangrams for new games
 }
 
 // make new server with given dictionary and pangrams
-func newServer(dic dictionary.Repository, pangrams []string) *server {
+func newServer(dic dictionary.Repository, pangrams []string, statsMgr *stats.Manager) *server {
 	return &server{
 		reg:      game.GetRegistry(),
 		dic:      dic,
 		pangrams: pangrams,
+		stats: statsMgr,
 	}
 }
 
@@ -59,6 +62,12 @@ func (beeServer *server) StartGame(ctx context.Context, req *beepb.StartGameRequ
 		Score:   0,
 		Found:   make(map[string]bool),
 	})
+
+	if beeServer.stats != nil {
+		if err := beeServer.stats.RecordGameStarted(); err != nil {
+			log.Printf("stats: failed to record game start: %v", err)
+		}
+	}
 
 	return &beepb.StartGameResponse{
 		GameId:       gameId,
@@ -104,6 +113,13 @@ func (beeServer *server) SubmitWord(ctx context.Context, req *beepb.SubmitWordRe
 	gameState.Found[word] = true
 	gameState.Score += wordScore
 
+	// update stats for a valid word
+	if beeServer.stats != nil {
+		if err := beeServer.stats.RecordWordSubmitted(true, pangram, wordScore, gameState.Score); err != nil {
+			log.Printf("stats: failed to record word: %v", err)
+		}
+	}
+
 	return &beepb.SubmitWordResponse{
 		Valid:      true,
 		WordScore:  int32(wordScore),
@@ -128,6 +144,12 @@ func main() {
 	}
 	log.Printf("loaded %d pangrams", len(pangramList))
 
+	// create stats manager
+	statsMgr, err := stats.NewManager("data/stats.json")
+	if err != nil {
+		log.Fatalf("init stats manager: %v", err)
+	}
+
 	// start gRPC server
 	listener, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -135,7 +157,7 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	beepb.RegisterBeeServiceServer(grpcServer, newServer(dic, pangramList))
+	beepb.RegisterBeeServiceServer(grpcServer, newServer(dic, pangramList, statsMgr))
 
 	log.Printf("Bee server running on :50051")
 	if err := grpcServer.Serve(listener); err != nil {
