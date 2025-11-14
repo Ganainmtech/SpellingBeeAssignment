@@ -1,0 +1,25 @@
+# Container image for spelling bee gRPC Sever (assignmentOne app)
+
+FROM golang:1.22
+
+# Set working dir inside container
+WORKDIR /app
+
+# copy go modules for caching purposes
+COPY go.mod go.sum ./
+RUN go mod download
+
+# copy rest of files
+COPY . .
+
+# build the gRPC server bin from cmd/server
+RUN go build -o bee-server ./cmd/server
+
+# gRPC server listens on port 50051
+EXPOSE 50051
+
+# point at host.docker.internal so can reach RMQ container running on host
+ENV AMQP_URL=amqp://admin:password@host.docker.internal:5672/
+
+# start the server 
+CMD ["./bee-server"]
