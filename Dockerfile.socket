@@ -1,0 +1,19 @@
+# container image for the stats socket server (Assignmenttwo app)
+# Comd: docker build -f Dockerfile.socket -t stats-server .
+
+FROM golang:latest
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# build the socket stats server bin from socker/server
+RUN go build -o stats-server ./socket/server
+
+# socket server lsitens on PORT 9000
+EXPOSE 9000
+
+CMD ["./stats-server"]

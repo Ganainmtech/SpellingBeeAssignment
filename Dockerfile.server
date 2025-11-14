@@ -1,6 +1,7 @@
 # Container image for spelling bee gRPC Sever (assignmentOne app)
+# comd: docker build -f Dockerfile.server -t bee-server .
 
-FROM golang:1.22
+FROM golang:latest
 
 # Set working dir inside container
 WORKDIR /app
