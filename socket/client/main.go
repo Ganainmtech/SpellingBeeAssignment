@@ -7,9 +7,105 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/streadway/amqp"
 )
 
-// Interactive client for the Spelling Bee stats socket server
+const defaultAMQPURL = "amqp://admin:password@localhost:5672/"
+
+// return the AMQP URL from env if set
+func getAMQPURL() string {
+	if v := os.Getenv("AMQP_URL"); v != "" {
+		return v
+	}
+	return defaultAMQPURL
+}
+
+//  RabbitMQ pangram consumer (runs in background goroutine)
+func consumePangramEvents() {
+	// Connect to RabbitMQ
+	conn, err := amqp.Dial(getAMQPURL())
+	if err != nil {
+		log.Printf("RabbitMQ dial error (client): %v", err)
+		return
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Printf("RabbitMQ channel error (client): %v", err)
+		return
+	}
+	defer ch.Close()
+
+	// declare the same exchange the server publishes to
+	if err := ch.ExchangeDeclare(
+		"bee.events", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-delete
+		false,        // internal
+		false,        // no-wait
+		nil,          // args
+	); err != nil {
+		log.Printf("RabbitMQ exchange declare (client): %v", err)
+		return
+	}
+
+	// Temporary auto-delete queue
+	q, err := ch.QueueDeclare(
+		"",    // let RabbitMQ pick a name
+		false, // durable
+		true,  // auto-delete
+		true,  // exclusive
+		false, // no-wait
+		nil,   // args
+	)
+	if err != nil {
+		log.Printf("RabbitMQ queue declare (client): %v", err)
+		return
+	}
+
+	// Bind queue to pangram events
+	if err := ch.QueueBind(
+		q.Name,
+		"bee.pangram", // routing key
+		"bee.events",  // exchange
+		false,
+		nil,
+	); err != nil {
+		log.Printf("RabbitMQ queue bind (client): %v", err)
+		return
+	}
+
+	// Consume messages
+	msgs, err := ch.Consume(
+		q.Name,
+		"",
+		true,  // auto-ack
+		true,  // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,
+	)
+	if err != nil {
+		log.Printf("RabbitMQ consume (client): %v", err)
+		return
+	}
+
+	// Loop forever printing pangram events
+	for d := range msgs {
+		payload := strings.TrimSpace(string(d.Body))
+		line := fmt.Sprintf("[PANGRAM EVENT] %s", payload)
+
+		// print message then reprint prompt
+		fmt.Print("\n" + line + "\n> ")
+	}
+
+	log.Println("Pangram event consumer ended")
+}
+
+//  Interactive stats socket client
 func main() {
 	// Default address
 	addr := "localhost:9000"
@@ -17,7 +113,7 @@ func main() {
 		addr = os.Args[1]
 	}
 
-	// connect to the stats socket server.
+	// connect to stats socket server
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Fatalf("connect: %v", err)
@@ -27,24 +123,23 @@ func main() {
 	serverReader := bufio.NewReader(conn)
 	serverWriter := bufio.NewWriter(conn)
 
-	// continuously reads lines from the server & prints in console 
-	// allows the server to send messages at any time without blocking the main thread
+	// background goroutine to read messages from stats server
 	go func() {
 		for {
 			line, err := serverReader.ReadString('\n')
 			if err != nil {
-				// Server closed or network error, exit
 				fmt.Println("\nDisconnected from stats server.")
 				os.Exit(0)
 			}
-			// Print the server message as-is (trim only trailing newline)
 			fmt.Print(strings.TrimRight(line, "\n") + "\n")
-			// Reprint prompt after async server message
 			fmt.Print("> ")
 		}
 	}()
 
-	// Main goroutine: simple REPL (Read-Eval-Print Loop)
+	// start pangram event consumer
+	go consumePangramEvents()
+
+	// Main REPL
 	input := bufio.NewScanner(os.Stdin)
 	fmt.Println("Stats client connected to", addr)
 	fmt.Println("Type HELP for commands, or QUIT to exit.")
@@ -57,21 +152,20 @@ func main() {
 			continue
 		}
 		if strings.EqualFold(cmd, "quit") || strings.EqualFold(cmd, "exit") {
-			// tell the server we're quitting.
 			fmt.Fprintln(serverWriter, "QUIT")
 			serverWriter.Flush()
 			return
 		}
 
-		// Send the command line to the server (adds '\n' automatically)
-		if _, err := fmt.Fprintln(serverWriter, cmd); err != nil {
+		_, err := fmt.Fprintln(serverWriter, cmd)
+		if err != nil {
 			log.Fatalf("write: %v", err)
 		}
+
 		if err := serverWriter.Flush(); err != nil {
 			log.Fatalf("flush: %v", err)
 		}
 
-		// Prompt again the background goroutine prints server responses
 		fmt.Print("> ")
 	}
 
