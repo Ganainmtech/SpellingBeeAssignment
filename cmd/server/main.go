@@ -12,6 +12,9 @@ import (
 	"time"
 	"unicode/utf8"
 	"assignmentOne/internal/stats"
+	"assignmentOne/internal/mq"
+	"fmt"
+	"os"
 
 	"google.golang.org/grpc"
 )
@@ -22,16 +25,18 @@ type server struct {
 	reg      *game.Registry        // game state manager
 	dic      dictionary.Repository // dictionary with cache
 	pangrams []string 
-	stats *stats.Manager // handles reading/writing stats.json             // list of pangrams for new games
+	stats *stats.Manager // handles reading/writing stats.json
+	pub *mq.Publisher // RMQ publisher for pangram events
 }
 
 // make new server with given dictionary and pangrams
-func newServer(dic dictionary.Repository, pangrams []string, statsMgr *stats.Manager) *server {
+func newServer(dic dictionary.Repository, pangrams []string, statsMgr *stats.Manager, pub *mq.Publisher) *server {
 	return &server{
 		reg:      game.GetRegistry(),
 		dic:      dic,
 		pangrams: pangrams,
 		stats: statsMgr,
+		pub: pub,
 	}
 }
 
@@ -120,6 +125,15 @@ func (beeServer *server) SubmitWord(ctx context.Context, req *beepb.SubmitWordRe
 		}
 	}
 
+	// if word is pangram, broadcast an event via RMQ
+	if pangram && beeServer.pub != nil {
+		msg := fmt.Sprintf(
+			"Pangram '%s' found in game %s (new total score: %d)",
+			word, req.GetGameId(), gameState.Score,
+		)
+		beeServer.pub.Publish("bee.pangram", msg)
+	}
+
 	return &beepb.SubmitWordResponse{
 		Valid:      true,
 		WordScore:  int32(wordScore),
@@ -150,6 +164,23 @@ func main() {
 		log.Fatalf("init stats manager: %v", err)
 	}
 
+	// connect RMQ for pangram events
+	amqpURL := os.Getenv("AMQP_URL")
+	if amqpURL == "" {
+		amqpURL = "amqp://admin:password@localhost:5672/"
+	}
+
+	pub, err := mq.Connect(amqpURL)
+	if err != nil {
+		log.Printf("warning: could not connect to RabbitMQ (%v); pangram events disable", err)
+		pub = nil
+	} else {
+		log.Printf("connected to RabbitMQ at %s", amqpURL)
+	}
+	if pub != nil {
+		defer pub.Close()
+	}
+
 	// start gRPC server
 	listener, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -157,7 +188,7 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	beepb.RegisterBeeServiceServer(grpcServer, newServer(dic, pangramList, statsMgr))
+	beepb.RegisterBeeServiceServer(grpcServer, newServer(dic, pangramList, statsMgr, pub))
 
 	log.Printf("Bee server running on :50051")
 	if err := grpcServer.Serve(listener); err != nil {
