@@ -23,7 +23,7 @@ func getAMQPURL() string {
 
 //  RabbitMQ pangram consumer (runs in background goroutine)
 func consumePangramEvents() {
-	// Connect to RabbitMQ
+	// connect to RabbitMQ
 	conn, err := amqp.Dial(getAMQPURL())
 	if err != nil {
 		log.Printf("RabbitMQ dial error (client): %v", err)
@@ -52,7 +52,7 @@ func consumePangramEvents() {
 		return
 	}
 
-	// Temporary auto-delete queue
+	// temporary auto-delete queue
 	q, err := ch.QueueDeclare(
 		"",    // let RabbitMQ pick a name
 		false, // durable
@@ -66,7 +66,7 @@ func consumePangramEvents() {
 		return
 	}
 
-	// Bind queue to pangram events
+	// bind queue to pangram events
 	if err := ch.QueueBind(
 		q.Name,
 		"bee.pangram", // routing key
@@ -78,7 +78,7 @@ func consumePangramEvents() {
 		return
 	}
 
-	// Consume messages
+	// consume messages
 	msgs, err := ch.Consume(
 		q.Name,
 		"",
@@ -93,7 +93,7 @@ func consumePangramEvents() {
 		return
 	}
 
-	// Loop forever printing pangram events
+	// loop forever printing pangram events
 	for d := range msgs {
 		payload := strings.TrimSpace(string(d.Body))
 		line := fmt.Sprintf("[PANGRAM EVENT] %s", payload)
@@ -107,7 +107,7 @@ func consumePangramEvents() {
 
 //  Interactive stats socket client
 func main() {
-	// Default address
+	// default address
 	addr := "localhost:9000"
 	if len(os.Args) > 1 {
 		addr = os.Args[1]

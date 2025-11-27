@@ -29,7 +29,7 @@ func NewManager(path string) (*Manager, error) {
 		data: Stats{},
 	}
 
-	// Try to load existing stats file (if it exists).
+	// try to load existing stats file (if it exists)
 	if err := m.load(); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
@@ -70,14 +70,14 @@ func (m *Manager) save() error {
 	return os.WriteFile(m.path, raw, 0o644)
 }
 
-// Snapshot returns a copy of the current stats.
+// snapshot returns a copy of the current stats.
 func (m *Manager) Snapshot() Stats {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.data
 }
 
-// RecordGameStarted increments the TotalGames counter and saves
+// recordGameStarted increments the TotalGames counter and saves
 func (m *Manager) RecordGameStarted() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -86,7 +86,7 @@ func (m *Manager) RecordGameStarted() error {
 	return m.save()
 }
 
-// RecordWordSubmitted is called every time a word is submitted
+// recordWordSubmitted is called every time a word is submitted
 func (m *Manager) RecordWordSubmitted(isValid bool, isPangram bool, wordScore int, newTotalScore int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

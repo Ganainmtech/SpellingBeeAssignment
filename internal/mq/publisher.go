@@ -6,16 +6,16 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// Exchange for spelling bee events.
+// exchange for spelling bee events
 const exchangeName = "bee.events"
 
-// Publisher holds the RabbitMQ connection and channel.
+// publisher holds the RabbitMQ connection and channel
 type Publisher struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
 }
 
-// Connect opens a connection and channel and declares the topic exchange.
+// connect opens a connection and channel and declares the topic exchange
 func Connect(amqpURL string) (*Publisher, error) {
 	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
@@ -28,7 +28,7 @@ func Connect(amqpURL string) (*Publisher, error) {
 		return nil, err
 	}
 
-	// Declare a durable topic exchange for our events.
+	// declare a durable topic exchange for our events.
 	if err := ch.ExchangeDeclare(
 		exchangeName, // name
 		"topic",      // type
@@ -48,10 +48,10 @@ func Connect(amqpURL string) (*Publisher, error) {
 	}, nil
 }
 
-// Publish sends a plain text message on the bee.events exchange
+// publish sends a plain text message on the bee.events exchange
 func (p *Publisher) Publish(routingKey, message string) {
 	if p == nil || p.channel == nil {
-		// Allow callers to treat nil publisher as "MQ disabled"
+		// allow callers to treat nil publisher as "MQ disabled"
 		return
 	}
 
@@ -70,7 +70,7 @@ func (p *Publisher) Publish(routingKey, message string) {
 	}
 }
 
-// Close closes channel and connection.
+// close closes channel and connection
 func (p *Publisher) Close() {
 	if p == nil {
 		return
