@@ -4,7 +4,7 @@ Name: Sara Jane Kenny
 Student Number: R00255434  
 Class: SDH3-A  
 
-This assignment extends the Spelling Bee game from Assignment 1 by adding a socket-based statistics system, RabbitMQ event broadcasting, concurrency support, and Dockerised server components. The original gRPC game server and client continue to operate as in Assignment 1, with additional logic integrated for statistics and pangram events.
+Extends the Spelling Bee game from Assignment 1 by adding a socket-based stats system, RabbitMQ event broadcasting, concurrency support, and Dockerised server components.
 
 ## Running the system
 
@@ -29,7 +29,7 @@ Run the stats socket server (Docker):
 docker run --rm --name stats-server -p 9000:9000 stats-server
 ```
 
-Run the clients locally:
+Run the clients:
 ```bash
 go run ./cmd/client
 go run ./socket/client
@@ -49,8 +49,8 @@ Multiple socket clients may be run at the same time.
    Example message: `Pangram 'factory' found in game g-1 (new total score: 15)`  
    Publishing is handled through a small helper in internal/mq/publisher.go.
 
-4. **Pangram event consumption in socket clients**  
-   Each socket client (socket/client) starts a goroutine that: connects to RabbitMQ, creates a temporary auto-deleted queue, binds the queue to bee.pangram, receives live pangram event messages, and prints them immediately on screen. All connected clients receive every pangram event (broadcast behaviour).
+4. **Pangram event in socket clients**  
+   Each socket client (socket/client) starts a goroutine that: connects to RabbitMQ, creates a temp auto-deleted queue, binds the queue to bee.pangram, receives live pangram event messages, and prints them on screen. All connected clients receive every pangram event
 
 5. **Concurrency support**  
    The socket server handles clients concurrently using: `go handleClient(conn)`. Each client receives its own dedicated goroutine. The server supports multiple active clients, responding to stat queries and receiving RabbitMQ events independently.
@@ -74,4 +74,4 @@ Multiple socket clients may be run at the same time.
 
 ## Resources
 
-Lab sheets and lecture material for sockets, concurrency, and RabbitMQ
+Lab sheets and lecture material for sockets, concurrency, and RabbitMQ for implementation. Online resources for extra understanding.
